@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client"
 
 import type React from "react"
@@ -363,7 +364,7 @@ export default function HomePage() {
 
             <AlgorithmCard
               name="A* Search"
-              description="Combines Dijkstra's algorithm with heuristic estimates to efficiently find optimal paths"
+              description="Combines Dijkstras algorithm with heuristic estimates to efficiently find optimal paths"
               strengths={["Optimal paths", "Efficient exploration", "Adaptable with different heuristics"]}
               weaknesses={["Heuristic calculation overhead", "Memory usage with large search spaces"]}
               bestFor="Finding optimal paths efficiently in complex environments"
@@ -631,7 +632,7 @@ function TestimonialCard({
       )}
       <Card className={`relative h-full bg-slate-800/80 border-slate-700 ${highlight ? `border-${accentColor}-400/50` : ""} transition-all group-hover:-translate-y-1 duration-300 shadow-lg hover:shadow-xl`}>
         <CardContent className="p-6 flex flex-col h-full">
-          <div className={`text-${accentColor}-400 text-4xl font-serif mb-4`}>"</div>
+          <div className={`text-${accentColor}-400 text-4xl font-serif mb-4`}>&quot;</div>
           <p className="text-slate-300 mb-6 italic">{quote}</p>
           <div className="mt-auto pt-4 border-t border-slate-700">
             <h4 className="font-medium">{author}</h4>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -12,15 +12,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Info, Play, RotateCcw, Save, Home, ChevronRight } from "lucide-react"
 
 interface Cell {
-  X: number
-  Y: number
+  x: number
+  y: number
 }
 
 interface MazeProps {
   maze: string[][]
-  currentCell: Cell
-  solutionPath: { x: number; y: number }[]
-  visitedPath: { x: number; y: number }[]
+  currentCell: Cell | null
+  solutionPath: Cell[]
+  visitedPath: Cell[]
   onCellClick?: (x: number, y: number) => void
   editMode?: boolean
 }
@@ -30,7 +30,7 @@ const Maze = ({ maze, currentCell, solutionPath, visitedPath, onCellClick, editM
   const getCellColor = (x: number, y: number) => {
     if (maze[x][y] === "1") return "bg-gray-800"
     if (maze[x][y] === "E") return "bg-red-500"
-    if (x === currentCell.X && y === currentCell.Y) return "bg-yellow-400"
+    if (currentCell && x === currentCell.x && y === currentCell.y) return "bg-yellow-400"
     if (solutionPath.some((cell) => cell.x === x && cell.y === y)) return "bg-green-400"
     if (visitedPath.some((cell) => cell.x === x && cell.y === y)) return "bg-blue-200"
     return "bg-white"
@@ -116,26 +116,14 @@ const isValidCell = (x: number, y: number, size: number): boolean => {
   return x >= 0 && x < size && y >= 0 && y < size
 }
 
-// Custom hook for maze state
-const useMaze = (size: number) => {
-  const [maze, setMaze] = useState<string[][]>([])
-  const [currentCell, setCurrentCell] = useState<Cell>({ X: 1, Y: 1 })
-
-  // Generate maze on client-side only
-  useEffect(() => {
-    setMaze(generateMaze(size))
-  }, [size])
-
-  return { maze, setMaze, currentCell, setCurrentCell }
-}
-
 export default function MazeSolver() {
   const [mazeSize, setMazeSize] = useState(19)
-  const { maze, setMaze, currentCell, setCurrentCell } = useMaze(mazeSize)
+  const [maze, setMaze] = useState<string[][]>([])
+  const [currentCell, setCurrentCell] = useState<Cell | null>(null)
   const [simulationRunning, setSimulationRunning] = useState(false)
   const [selectedAlgorithm, setSelectedAlgorithm] = useState("")
-  const [solutionPath, setSolutionPath] = useState<{ x: number; y: number }[]>([])
-  const [visitedCells, setVisitedCells] = useState<{ x: number; y: number }[]>([])
+  const [solutionPath, setSolutionPath] = useState<Cell[]>([])
+  const [visitedCells, setVisitedCells] = useState<Cell[]>([])
   const [animationSpeed, setAnimationSpeed] = useState(40)
   const [activeTab, setActiveTab] = useState("solve")
   const [editMode, setEditMode] = useState(false)
@@ -143,184 +131,157 @@ export default function MazeSolver() {
   const [customMazes, setCustomMazes] = useState<{ name: string; maze: string[][] }[]>([])
   const [currentMazeName, setCurrentMazeName] = useState("Random Maze")
 
-  // Run simulation
-  const runSimulationAction = () => {
-    if (solutionPath.length > 0) {
-      setSimulationRunning(true)
-      const interval = setInterval(() => {
-        setSolutionPath((path) => {
-          if (path.length > 0) {
-            setCurrentCell({ X: path[0].x, Y: path[0].y })
-            return path.slice(1)
-          } else {
-            setSimulationRunning(false)
-            clearInterval(interval)
-            return []
-          }
-        })
-      }, 100)
-    }
-  }
-
-  // Reset the maze
-  const resetAction = () => {
-    setSelectedAlgorithm("")
-    setCurrentCell({ X: 1, Y: 1 })
-    setSolutionPath([])
-    setVisitedCells([])
-  }
-
-  // Generate a new random maze
-  const newMazeAction = () => {
-    resetAction()
+  // Initialize maze on component mount
+  useEffect(() => {
     setMaze(generateMaze(mazeSize))
-    setCurrentMazeName("Random Maze")
-  }
-
-  // Save custom maze
-  const saveMazeAction = () => {
-    const name = `Custom Maze ${customMazes.length + 1}`
-    setCustomMazes([...customMazes, { name, maze: [...maze] }])
-    setCurrentMazeName(name)
-  }
-
-  // Handle cell click in edit mode
-  const handleCellClick = (x: number, y: number) => {
-    if (!editMode) return
-
-    // Don't allow editing the start or end points
-    if ((x === 1 && y === 1) || maze[x][y] === "E") return
-
-    const newMaze = [...maze]
-
-    if (cellType === "wall") {
-      newMaze[x][y] = newMaze[x][y] === "1" ? "0" : "1"
-    } else if (cellType === "end") {
-      // Remove previous end point
-      for (let i = 0; i < newMaze.length; i++) {
-        for (let j = 0; j < newMaze[i].length; j++) {
-          if (newMaze[i][j] === "E") {
-            newMaze[i][j] = "0"
-          }
-        }
-      }
-      newMaze[x][y] = "E"
-    }
-
-    setMaze(newMaze)
-  }
+    setCurrentCell({ x: 1, y: 1 })
+  }, [mazeSize])
 
   // BFS Algorithm
-  const BfsAlgorithm = () => {
+  const BfsAlgorithm = useCallback(() => {
+    if (!maze || maze.length === 0) return { visited: [], solution: [] }
+
+    console.log("Running BFS algorithm")
+
     // Initialize
-    const visited: { x: number; y: number }[] = []
-    const queue: { x: number; y: number }[] = []
-    const parents = new Map()
-    parents.set("1 1", null)
+    const visited: Cell[] = []
+    const queue: Cell[] = []
+    const parents = new Map<string, Cell | null>()
+
+    // Start at (1,1)
+    parents.set("1,1", null)
     queue.push({ x: 1, y: 1 })
     let found = false
+    let endCell: Cell | null = null
 
     // Iterate
     while (queue.length > 0 && !found) {
       const curr = queue.shift()!
       visited.push(curr)
+
       if (maze[curr.x][curr.y] === "E") {
         found = true
+        endCell = curr
         break
       }
+
       const neighbors = [
         { x: curr.x + 1, y: curr.y },
         { x: curr.x, y: curr.y + 1 },
         { x: curr.x, y: curr.y - 1 },
         { x: curr.x - 1, y: curr.y },
       ]
+
       for (const neighbor of neighbors) {
         if (
-          isValidCell(neighbor.x, neighbor.y, maze[0].length) &&
+          isValidCell(neighbor.x, neighbor.y, maze.length) &&
           maze[neighbor.x][neighbor.y] !== "1" &&
           !visited.some((v) => v.x === neighbor.x && v.y === neighbor.y) &&
           !queue.some((q) => q.x === neighbor.x && q.y === neighbor.y)
         ) {
           queue.push(neighbor)
-          parents.set(`${neighbor.x} ${neighbor.y}`, curr)
+          parents.set(`${neighbor.x},${neighbor.y}`, curr)
         }
       }
     }
 
     // Construct solution
-    if (found) {
-      const solutionPath: { x: number; y: number }[] = []
-      let last = visited[visited.length - 1]
-      while (last !== null) {
-        solutionPath.unshift(last)
-        last = parents.get(`${last.x} ${last.y}`)
+    const solution: Cell[] = []
+    if (found && endCell) {
+      let current: Cell | null = endCell
+      while (current !== null) {
+        solution.unshift(current)
+        current = parents.get(`${current.x},${current.y}`) || null
       }
-
-      animateSearch(visited, solutionPath)
     }
-  }
+
+    console.log("BFS completed", { visited: visited.length, solution: solution.length })
+    return { visited, solution }
+  }, [maze])
 
   // DFS Algorithm
-  const DfsAlgorithm = () => {
+  const DfsAlgorithm = useCallback(() => {
+    if (!maze || maze.length === 0) return { visited: [], solution: [] }
+
+    console.log("Running DFS algorithm")
+
     // Initialize
-    const visited: { x: number; y: number }[] = []
-    const stack: { x: number; y: number }[] = []
-    const parents = new Map()
-    parents.set("1 1", null)
+    const visited: Cell[] = []
+    const stack: Cell[] = []
+    const parents = new Map<string, Cell | null>()
+
+    // Start at (1,1)
+    parents.set("1,1", null)
     stack.push({ x: 1, y: 1 })
     let found = false
+    let endCell: Cell | null = null
 
     // Iterate
     while (stack.length > 0 && !found) {
       const curr = stack.pop()!
+
+      // Skip if already visited
+      if (visited.some((v) => v.x === curr.x && v.y === curr.y)) {
+        continue
+      }
+
       visited.push(curr)
+
       if (maze[curr.x][curr.y] === "E") {
         found = true
+        endCell = curr
         break
       }
+
       const neighbors = [
-        { x: curr.x + 1, y: curr.y },
-        { x: curr.x, y: curr.y + 1 },
-        { x: curr.x, y: curr.y - 1 },
-        { x: curr.x - 1, y: curr.y },
+        { x: curr.x - 1, y: curr.y }, // Left
+        { x: curr.x, y: curr.y - 1 }, // Up
+        { x: curr.x + 1, y: curr.y }, // Right
+        { x: curr.x, y: curr.y + 1 }, // Down
       ]
+
       for (const neighbor of neighbors) {
         if (
-          isValidCell(neighbor.x, neighbor.y, maze[0].length) &&
+          isValidCell(neighbor.x, neighbor.y, maze.length) &&
           maze[neighbor.x][neighbor.y] !== "1" &&
           !visited.some((v) => v.x === neighbor.x && v.y === neighbor.y) &&
           !stack.some((s) => s.x === neighbor.x && s.y === neighbor.y)
         ) {
           stack.push(neighbor)
-          parents.set(`${neighbor.x} ${neighbor.y}`, curr)
+          parents.set(`${neighbor.x},${neighbor.y}`, curr)
         }
       }
     }
 
     // Construct solution
-    if (found) {
-      const solutionPath: { x: number; y: number }[] = []
-      let last = visited[visited.length - 1]
-      while (last !== null) {
-        solutionPath.unshift(last)
-        last = parents.get(`${last.x} ${last.y}`)
+    const solution: Cell[] = []
+    if (found && endCell) {
+      let current: Cell | null = endCell
+      while (current !== null) {
+        solution.unshift(current)
+        current = parents.get(`${current.x},${current.y}`) || null
       }
-
-      animateSearch(visited, solutionPath)
     }
-  }
+
+    console.log("DFS completed", { visited: visited.length, solution: solution.length })
+    return { visited, solution }
+  }, [maze])
 
   // A* Algorithm
-  const AStarAlgorithm = () => {
+  const AStarAlgorithm = useCallback(() => {
+    if (!maze || maze.length === 0) return { visited: [], solution: [] }
+
+    console.log("Running A* algorithm")
+
     // Initialize
-    const visited: { x: number; y: number }[] = []
-    const openSet: { x: number; y: number; f: number; g: number; h: number }[] = []
-    const parents = new Map()
-    const gScore = new Map()
-    const fScore = new Map()
+    const visited: Cell[] = []
+    const openSet: (Cell & { f: number; g: number; h: number })[] = []
+    const parents = new Map<string, Cell | null>()
+    const gScore = new Map<string, number>()
+    const fScore = new Map<string, number>()
 
     // Find End (x,y)
-    let endPosition = { x: 0, y: 0 }
+    let endPosition: Cell | null = null
     for (let i = 0; i < maze.length; i++) {
       for (let j = 0; j < maze[i].length; j++) {
         if (maze[i][j] === "E") {
@@ -328,23 +289,30 @@ export default function MazeSolver() {
           break
         }
       }
+      if (endPosition) break
+    }
+
+    if (!endPosition) {
+      console.error("End position not found in maze")
+      return { visited: [], solution: [] }
     }
 
     // Heuristic function (Manhattan distance)
     const heuristic = (x: number, y: number) => {
-      return Math.abs(x - endPosition.x) + Math.abs(y - endPosition.y)
+      return Math.abs(x - endPosition!.x) + Math.abs(y - endPosition!.y)
     }
 
     // Set up for start node
     const start = { x: 1, y: 1 }
-    const startKey = `1 1`
+    const startKey = "1,1"
     parents.set(startKey, null)
     gScore.set(startKey, 0)
     const h = heuristic(start.x, start.y)
     fScore.set(startKey, h)
-    openSet.push({ x: start.x, y: start.y, f: h, g: 0, h })
+    openSet.push({ ...start, f: h, g: 0, h })
 
     let found = false
+    let endCell: Cell | null = null
 
     // Loop
     while (openSet.length > 0 && !found) {
@@ -353,14 +321,15 @@ export default function MazeSolver() {
 
       // Get the node with lowest fScore
       const current = openSet.shift()!
-      const currentKey = `${current.x} ${current.y}`
+      const currentKey = `${current.x},${current.y}`
 
       // Add to visited list
-      visited.push({ x: current.x, y: current.y })
+      visited.push(current)
 
       // Check if we reached the end
       if (maze[current.x][current.y] === "E") {
         found = true
+        endCell = current
         break
       }
 
@@ -374,22 +343,22 @@ export default function MazeSolver() {
 
       for (const neighbor of neighbors) {
         // Skip if not valid or is a wall
-        if (!isValidCell(neighbor.x, neighbor.y, maze[0].length) || maze[neighbor.x][neighbor.y] === "1") {
+        if (!isValidCell(neighbor.x, neighbor.y, maze.length) || maze[neighbor.x][neighbor.y] === "1") {
           continue
         }
 
-        const neighborKey = `${neighbor.x} ${neighbor.y}`
+        const neighborKey = `${neighbor.x},${neighbor.y}`
 
         // Calculate new gScore
-        const new_gScore = gScore.get(currentKey) + 1
+        const tentative_gScore = (gScore.get(currentKey) || 0) + 1
 
         // If this path is better than previous one
-        if (!gScore.has(neighborKey) || new_gScore < gScore.get(neighborKey)) {
+        if (!gScore.has(neighborKey) || tentative_gScore < (gScore.get(neighborKey) || Number.POSITIVE_INFINITY)) {
           // Update path and scores
-          parents.set(neighborKey, { x: current.x, y: current.y })
-          gScore.set(neighborKey, new_gScore)
+          parents.set(neighborKey, current)
+          gScore.set(neighborKey, tentative_gScore)
           const h = heuristic(neighbor.x, neighbor.y)
-          const f = new_gScore + h
+          const f = tentative_gScore + h
           fScore.set(neighborKey, f)
 
           // Add to open set if not already there
@@ -398,7 +367,7 @@ export default function MazeSolver() {
               x: neighbor.x,
               y: neighbor.y,
               f,
-              g: new_gScore,
+              g: tentative_gScore,
               h,
             })
           }
@@ -407,51 +376,172 @@ export default function MazeSolver() {
     }
 
     // Construct solution path
-    if (found) {
-      const solutionPath: { x: number; y: number }[] = []
-      let last = visited[visited.length - 1]
-      while (last !== null) {
-        solutionPath.unshift(last)
-        last = parents.get(`${last.x} ${last.y}`)
+    const solution: Cell[] = []
+    if (found && endCell) {
+      let current: Cell | null = endCell
+      while (current !== null) {
+        solution.unshift(current)
+        current = parents.get(`${current.x},${current.y}`) || null
       }
-
-      animateSearch(visited, solutionPath)
     }
-  }
+
+    console.log("A* completed", { visited: visited.length, solution: solution.length })
+    return { visited, solution }
+  }, [maze])
 
   // Animate the search process
-  const animateSearch = (visited: { x: number; y: number }[], solution: { x: number; y: number }[]) => {
+  const animateSearch = useCallback(
+    (visited: Cell[], solution: Cell[]) => {
+      setSimulationRunning(true)
+      setVisitedCells([])
+      setSolutionPath([])
+
+      console.log("Starting animation", { visitedLength: visited.length, solutionLength: solution.length })
+
+      let visitedCurr = 0
+      const visitedBuilder = setInterval(
+        () => {
+          if (visitedCurr < visited.length) {
+            setVisitedCells((prev) => [...prev, visited[visitedCurr]])
+            visitedCurr++
+          } else {
+            clearInterval(visitedBuilder)
+
+            // Store the solution path
+            setSolutionPath(solution)
+            setCurrentCell(solution[0])
+            setSimulationRunning(false)
+
+            console.log("Animation completed")
+          }
+        },
+        Math.max(10, animationSpeed),
+      )
+    },
+    [animationSpeed],
+  )
+
+  // Run simulation of the solution path
+  const animateSolution = useCallback(() => {
+    if (solutionPath.length === 0) return
+
     setSimulationRunning(true)
+    setCurrentCell(solutionPath[0])
 
-    let visitedCurr = 0
-    const visitedBuilder = setInterval(() => {
-      if (visitedCurr < visited.length) {
-        setVisitedCells((prev) => [...prev, visited[visitedCurr]])
-        visitedCurr++
-      } else {
-        clearInterval(visitedBuilder)
+    let currentIndex = 1
+    const interval = setInterval(
+      () => {
+        if (currentIndex < solutionPath.length) {
+          setCurrentCell(solutionPath[currentIndex])
+          currentIndex++
+        } else {
+          clearInterval(interval)
+          setSimulationRunning(false)
+        }
+      },
+      Math.max(10, 100 - animationSpeed),
+    )
+  }, [solutionPath, animationSpeed])
 
-        // Start solution path animation after visited cells animation is done
-        setSolutionPath(solution)
-        setSimulationRunning(false)
+  // Run button action
+  const runSimulationAction = useCallback(() => {
+    if (simulationRunning) return
+
+    console.log("Run button clicked", { selectedAlgorithm, hasSolution: solutionPath.length > 0 })
+
+    // If we have a solution path already, animate it
+    if (solutionPath.length > 0) {
+      animateSolution()
+      return
+    }
+
+    // Otherwise, run the selected algorithm
+    if (selectedAlgorithm) {
+      // Reset state
+      setVisitedCells([])
+      setSolutionPath([])
+      setCurrentCell({ x: 1, y: 1 })
+
+      let result: { visited: Cell[]; solution: Cell[] } = { visited: [], solution: [] }
+
+      // Run the selected algorithm
+      if (selectedAlgorithm === "BFS") {
+        result = BfsAlgorithm()
+      } else if (selectedAlgorithm === "DFS") {
+        result = DfsAlgorithm()
+      } else if (selectedAlgorithm === "A*") {
+        result = AStarAlgorithm()
       }
-    }, animationSpeed)
-  }
 
-  // Run algorithm when selected
-  useEffect(() => {
+      // Animate the search process
+      if (result.visited.length > 0) {
+        animateSearch(result.visited, result.solution)
+      }
+    }
+  }, [
+    simulationRunning,
+    selectedAlgorithm,
+    solutionPath,
+    BfsAlgorithm,
+    DfsAlgorithm,
+    AStarAlgorithm,
+    animateSearch,
+    animateSolution,
+  ])
+
+  // Reset the maze
+  const resetAction = useCallback(() => {
+    setSelectedAlgorithm("")
+    setCurrentCell({ x: 1, y: 1 })
     setSolutionPath([])
     setVisitedCells([])
-    setCurrentCell({ X: 1, Y: 1 })
+  }, [])
 
-    if (selectedAlgorithm === "BFS") {
-      BfsAlgorithm()
-    } else if (selectedAlgorithm === "DFS") {
-      DfsAlgorithm()
-    } else if (selectedAlgorithm === "A*") {
-      AStarAlgorithm()
-    }
-  }, [selectedAlgorithm])
+  // Generate a new random maze
+  const newMazeAction = useCallback(() => {
+    resetAction()
+    setMaze(generateMaze(mazeSize))
+    setCurrentMazeName("Random Maze")
+  }, [mazeSize, resetAction])
+
+  // Save custom maze
+  const saveMazeAction = useCallback(() => {
+    const name = `Custom Maze ${customMazes.length + 1}`
+    setCustomMazes((prev) => [...prev, { name, maze: JSON.parse(JSON.stringify(maze)) }])
+    setCurrentMazeName(name)
+  }, [maze, customMazes])
+
+  // Handle cell click in edit mode
+  const handleCellClick = useCallback(
+    (x: number, y: number) => {
+      if (!editMode) return
+
+      // Don't allow editing the start or end points
+      if (x === 1 && y === 1) return
+
+      const newMaze = JSON.parse(JSON.stringify(maze))
+
+      if (cellType === "wall") {
+        newMaze[x][y] = newMaze[x][y] === "1" ? "0" : "1"
+      } else if (cellType === "end") {
+        // Remove previous end point
+        for (let i = 0; i < newMaze.length; i++) {
+          for (let j = 0; j < newMaze[i].length; j++) {
+            if (newMaze[i][j] === "E") {
+              newMaze[i][j] = "0"
+            }
+          }
+        }
+        newMaze[x][y] = "E"
+      }
+
+      setMaze(newMaze)
+
+      // Reset solution when maze is edited
+      resetAction()
+    },
+    [editMode, cellType, maze, resetAction],
+  )
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-6">
@@ -468,14 +558,16 @@ export default function MazeSolver() {
           <div className="grid lg:grid-cols-[1fr_auto] gap-6">
             {/* Maze display */}
             <Card className="order-2 lg:order-1 flex items-center justify-center p-4 overflow-auto">
-              <Maze
-                maze={maze}
-                currentCell={currentCell}
-                solutionPath={solutionPath}
-                visitedPath={visitedCells}
-                onCellClick={handleCellClick}
-                editMode={editMode}
-              />
+              {maze.length > 0 && (
+                <Maze
+                  maze={maze}
+                  currentCell={currentCell}
+                  solutionPath={solutionPath}
+                  visitedPath={visitedCells}
+                  onCellClick={handleCellClick}
+                  editMode={editMode}
+                />
+              )}
             </Card>
 
             {/* Controls */}
@@ -548,7 +640,7 @@ export default function MazeSolver() {
                       <Button
                         variant="default"
                         className="gap-2"
-                        disabled={simulationRunning || !solutionPath.length}
+                        disabled={simulationRunning || !selectedAlgorithm}
                         onClick={runSimulationAction}
                       >
                         <Play className="w-4 h-4" />
@@ -619,7 +711,6 @@ export default function MazeSolver() {
                           if (!simulationRunning) {
                             setMazeSize(value[0])
                             resetAction()
-                            setMaze(generateMaze(value[0]))
                           }
                         }}
                         min={11}

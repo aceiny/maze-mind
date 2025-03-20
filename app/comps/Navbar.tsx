@@ -4,23 +4,27 @@ import Link from 'next/link'
 import React from 'react'
 
 const Navbar = () => {
+  const routes = [
+    { name : 'Game', href: '/game'},
+    { name: 'Features', href: '/#features' },
+    { name: 'Algorithms', href: '/#algorithms' },
+    { name: 'About', href: '/#about' },
+  ]
   return (
     <header className="w-full py-6 px-4 sticky top-0  backdrop-blur-md z-10">
     <div className="flex justify-between items-center">
-      <div className="flex items-center gap-2">
+      <Link href={"/"} className="flex items-center gap-2">
         <Grid3X3 className="h-6 w-6 text-primary" />
         <span className="font-bold text-xl">MazeMind</span>
-      </div>
+      </Link>
       <nav className="hidden md:flex items-center gap-8">
-        <Link href="/#features" className="text-slate-600 hover:text-white transition-colors">
-          Features
-        </Link>
-        <Link href="/#algorithms" className="text-slate-600 hover:text-white transition-colors">
-          Algorithms
-        </Link>
-        <Link href="/#about" className="text-slate-600 hover:text-white transition-colors">
-          About
-        </Link>
+        {routes.map((route, index) => {
+          return (
+            <Link key={index} href={route.href} className="text-slate-600 hover:text-white transition-colors">
+            {route.name}
+            </Link>
+          )
+        })}
       </nav>
       <div className="flex gap-3">
         <Button asChild variant="outline" size="sm" className="shadow-lg hover:shadow-primary/20">
