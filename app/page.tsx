@@ -444,7 +444,8 @@ export default function HomePage() {
             </p>
 
             <div className="pt-6 border-t border-slate-700">
-              <h3 className="text-xl font-semibold mb-4">Developer</h3>
+              <h3 className="text-xl font-semibold mb-4">Developers</h3>
+              <section className=" flex md:flex-row flex-col gap-5 md:items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold shadow-lg">
                   AYZ
@@ -454,6 +455,16 @@ export default function HomePage() {
                   <p className="text-sm text-slate-400">Group 1CS4</p>
                 </div>
               </div>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold shadow-lg">
+                  YB
+                </div>
+                <div>
+                  <h4 className="font-medium">Yasseur Boutobba</h4>
+                  <p className="text-sm text-slate-400">Group 1CS4</p>
+                </div>
+              </div>
+              </section>
             </div>
           </div>
         </div>

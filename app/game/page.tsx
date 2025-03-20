@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Info, Play, RotateCcw, Save, Home, ChevronRight } from "lucide-react"
+import Link from "next/link"
 
 interface Cell {
   x: number
@@ -549,10 +550,12 @@ export default function MazeSolver() {
         <div className="flex flex-col gap-6">
           <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-slate-800">{currentMazeName}</h1>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Link href={"/"} >
+            <Button variant="outline" size="sm" className="gap-2 hover:cursor-pointer">
               <Home className="w-4 h-4" />
               <span className="hidden sm:inline">Home</span>
             </Button>
+            </Link>
           </div>
 
           <div className="grid lg:grid-cols-[1fr_auto] gap-6">
